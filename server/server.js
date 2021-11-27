@@ -2,6 +2,7 @@ const http = require('http')
 const fs = require('fs')
 const os = require('os')
 const path = require('path')
+const url = require('url')
 const RWLock = require('rwlock')
 
 const logFileName = path.join(__dirname, '..', 'logfile.log')
@@ -33,23 +34,39 @@ function checkFileFS(filename) {
     return fs.existsSync(filename);
 }
 
+function serveFile(filename, response){
+    fs.readFile(filename, 'utf8', (err, data) => {
+        if (err) {
+            response.end()
+            return
+        }
+
+        response.end(data)
+    })
+}
+
 // Check if requested file is found
-function checkRequestFile(request) {
+function checkRequestFile(request, response) {
     
     responseParams = {
         status: 404,
-        body: 'Not found'
+        redirect: undefined,
+        body: undefined,
+        serving: false
     }
 
-    file = request.url.substring(1)
+    let uri = url.parse(request.url)
+    let file = uri.pathname
     let filename = path.join(__dirname, '..', 'pages', file)
     let found = checkFileFS(filename)
     
     if (!found) {
         responseParams.body = `İstenilen dosya/sayfa '${file}' bulunamadı 😔`
+        responseParams.status = 404
     } else {
-        responseParams.body = `Getirdim getirdim 🥳, şuan buradasın: ${file}`
         responseParams.status = 200
+        responseParams.serving = true
+        serveFile(filename, response)
     }
 
     return responseParams
@@ -58,16 +75,20 @@ function checkRequestFile(request) {
 
 function serverProcess(request, response) {
     
-    let responseParams = checkRequestFile(request)
+    let responseParams = checkRequestFile(request, response)
     
     response.writeHead(responseParams.status, {
-        'Content-Length': Buffer.byteLength(responseParams.body),
-        'Content-Type': 'text/plain; charset=utf-8',
-        'User-Agent': 'Mozilla/5.0'
+        'Content-Type': 'text/html; charset=utf-8',
     })
-    response.write(responseParams.body)
+    
+    if (responseParams.body){
+        response.write(responseParams.body)        
+    }
 
-    response.end()
+    // file contents will be sent to client in time. Do not close connection
+    if (!responseParams.serving){
+        response.end()
+    }
 
     logRequest(request, responseParams)
 }
