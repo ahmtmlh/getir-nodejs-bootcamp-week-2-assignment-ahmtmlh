@@ -19,6 +19,9 @@ async function logRequest(request, responseParams) {
 
     let dump = JSON.stringify(requestInfo) + os.EOL
 
+    // In case of multiple writes to the same file by different connections
+    // log file could corrupt since each 'thread' will have a different cursor and file descriptor
+    // This lock ensures that only one 'thread' at a time can access to file
     logFileLock.writeLock(function (release) {
 
         fs.appendFile(logFileName, dump, 'utf-8', function (err) {
